@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deploy
+  labels:
+    app: nginx
+spec:
+  selector:
+    matchLabels: 
+      app: nginx 
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone # Распределение подов по зонам доступности(по условию их 3) для обеспечения HA 
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: nginx 
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname # Дополнительное аспределение подов по узлам кластера (по условию 5) для большей равномерности
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: nginx
+      containers:
+      - name: nginx
+        image: docker.io/nginx:1.27
+        ports:
+          - containerPort: 80
+        # "на первые запросы приложению требуется значительно больше ресурсов CPU, в дальнейшем потребление ровное в районе 0.1 CPU. По памяти всегда “ровно” в районе 128M memory"
+        resources:  
+          requests:
+            cpu: 100m 
+            memory: 128Mi
+          limits:
+            cpu: 300m # Допустим, что такого значения будет достаточно для удовлетворения повышенного потребления cpu при инициализации
+            memory: 128Mi
+        readinessProbe:
+          httpGet:
+            scheme: HTTP
+            path: /healthz # Подразумеватеся, что такой эндопоинт веб приложения существует
+            port: 80
+          initialDelaySeconds: 10 # Даем время для инициализации, по условию 5-10 секунд
+          periodSeconds: 5
+
+           
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  selector:
+    app: nginx
+  ports:
+    - name: app-listener
+      protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+# Известно, что "приложение имеет дневной цикл по нагрузке – ночью запросов на порядки меньше, пик – днём"
+# HPA отлично подходит для решения этой задачи с его автоматическим маштабированием. Маштабировать будем по averageUtilization cpu
+# Так как используем HPA, в Deployment не используем фиксированное значение spec.replicas по рекомендации из официальной документации 
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nginx-scaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx-deploy
+  minReplicas: 1
+  # "по результатам нагрузочного теста известно, что 4 пода справляются с пиковой нагрузкой"
+  maxReplicas: 4
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
