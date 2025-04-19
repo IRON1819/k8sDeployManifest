@@ -42,7 +42,7 @@ spec:
         readinessProbe:
           httpGet:
             scheme: HTTP
-            path: /healthz # Подразумеватеся, что такой эндопоинт веб приложения существует
+            path: / # Для теста стартовой страницы nginx. В случае с реальным веб приложением, желательно реализовать эндпоинт /healthcheck
             port: 80
           initialDelaySeconds: 10 # Даем время для инициализации, по условию 5-10 секунд
           periodSeconds: 5
