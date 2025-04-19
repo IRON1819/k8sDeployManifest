@@ -21,7 +21,7 @@ spec:
           matchLabels:
             app: nginx 
       - maxSkew: 1
-        topologyKey: kubernetes.io/hostname # Дополнительное аспределение подов по узлам кластера (по условию 5) для большей равномерности
+        topologyKey: kubernetes.io/hostname # Дополнительное распределение подов по узлам кластера (по условию 5) для большей равномерности
         whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
